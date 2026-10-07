@@ -188,9 +188,12 @@ let ``publishing to an issue writes the pre-PR files and the issue body round-tr
     let issue = File.ReadAllText(Path.Combine(dir, "I-1.md"))
     Assert.Equal("[pre-PR] I-1: Refunds", File.ReadAllText(Path.Combine(dir, "I-1.title")))
     Assert.Contains("```mermaid", issue)
-    Assert.Contains("| 1 | Refunding an unknown order fails without charging anyone. | ✅ Refund returns false for unknown id |", issue)
-    Assert.Contains("- [x] Every acceptance criterion has a test (1/1)", issue)
-    Assert.Contains("| ✏️ | `public void Cancel(int id)` | Raises an OrderCancelled event after cancelling. | | — |", issue)
+    Assert.Contains("ac1[\"1. Refunding an unknown order fails without charging anyone.\"]:::ac", issue)
+    Assert.Contains("ac1 --> t0", issue)
+    Assert.Contains("✅ 1/1 criteria have a test", issue)
+    Assert.Contains("  // Raises an OrderCancelled event after cancelling.", issue)
+    Assert.Contains("! public void Cancel(int id)", issue)
+    Assert.Contains("+ test 'Refund returns false for unknown id'   ✓ #1", issue)
     Assert.Equal(Result.Ok p, Engine.IssueBody.extract issue)
     let md = Engine.renderIssue p
     // A plan string containing a fence can't break out of the embedded block.

@@ -1,8 +1,55 @@
-> [!NOTE]
-> **Pre-PR for STORY-7**: Shoppers can't apply promotions at checkout.
-> Planned against `790b737` · 2 files · ~30 lines · ready for review
+**Shoppers can't apply promotions at checkout.**
 
-<details><summary><b>Original story</b></summary>
+`2 files` `+1 new` `~1 changed` `2 tests` ✅ ready
+
+```mermaid
+flowchart LR
+  classDef ac fill:#ddf4ff,stroke:#0969da,color:#0a3069
+  classDef gap fill:#ffebe9,stroke:#cf222e,color:#a40e26
+  classDef test fill:#ffffff,stroke:#1a7f37,color:#1a7f37,stroke-dasharray:4 3
+  classDef add fill:#dafbe1,stroke:#1a7f37,color:#116329
+  classDef mod fill:#fff8c5,stroke:#9a6700,color:#7d4e00
+  classDef del fill:#ffebe9,stroke:#cf222e,color:#a40e26
+  classDef box fill:#ffffff,stroke:#d1d9e0,color:#59636e
+  subgraph done["Done when"]
+    ac1["1. A valid percentage code reduces the subtotal by that percentage."]:::ac
+    ac2["2. An unknown code leaves the subtotal unchanged."]:::ac
+  end
+  subgraph proof["Proved by"]
+    t0(["🧪 applies a percentage code"]):::test
+    t1(["🧪 ignores an unknown code"]):::test
+  end
+  subgraph code["Code"]
+    subgraph f0["cart.ts"]
+      c0_0["~ subtotal"]:::mod
+      c0_1_0["+ discountFor"]:::add
+    end
+  end
+  ac1 --> t0
+  ac2 --> t1
+  proof -.- code
+  class done,proof,code,f0 box
+```
+
+#### What changes <sub>🔒 CI fails the PR if the code doesn't match</sub>
+```diff
+@@ src/cart.ts @@
+  // Applies the discount code, if any, after summing the lines.
+- export function subtotal(lines: Line[]): number
++ export function subtotal(lines: Line[], code?: string): number
+  // Looks up a code and returns its percentage, or zero when the code is unknown.
++ export function discountFor(code: string): number
+
+@@ test/cart.test.ts @@
++ test 'applies a percentage code'   ✓ #1
++ test 'ignores an unknown code'     ✓ #2
+```
+
+<details><summary>Checks, impact and story</summary>
+
+✅ every symbol exists at `790b737` · ✅ every change was read first · ✅ 2/2 criteria have a test · ✅ standards: none apply
+
+Impact: `subtotal` used in ~1 file
 
 > Discount codes at checkout
 > 
@@ -13,71 +60,6 @@
 > - An unknown code leaves the subtotal unchanged.
 
 </details>
-
-### Map
-
-```mermaid
-flowchart LR
-  classDef add fill:#dafbe1,stroke:#1a7f37,color:#1f2328
-  classDef mod fill:#fff8c5,stroke:#9a6700,color:#1f2328
-  classDef del fill:#ffebe9,stroke:#cf222e,color:#1f2328
-  classDef ac fill:#ddf4ff,stroke:#0969da,color:#1f2328
-  classDef test fill:#dafbe1,stroke:#1a7f37,color:#1f2328,stroke-dasharray:4 3
-  subgraph f0["cart.ts"]
-    n0_0["~ subtotal"]:::mod
-    n0_1_0["+ discountFor"]:::add
-  end
-  subgraph f1["cart.test.ts"]
-    n1_0_0["🧪 applies a percentage code"]:::test
-    n1_0_1["🧪 ignores an unknown code"]:::test
-  end
-  ac1(["AC 1"]):::ac
-  ac1 --> n1_0_0
-  ac2(["AC 2"]):::ac
-  ac2 --> n1_0_1
-```
-
-### Acceptance criteria
-
-| # | Criterion | Proved by |
-|:-:|---|---|
-| 1 | A valid percentage code reduces the subtotal by that percentage. | ✅ applies a percentage code |
-| 2 | An unknown code leaves the subtotal unchanged. | ✅ ignores an unknown code |
-
-### Changes
-
-🟡 `src/cart.ts`
-
-| | Change | What it does | Covers | Used in |
-|:-:|---|---|:-:|:-:|
-| ✏️ | `export function subtotal(lines: Line[]): number` | Applies the discount code, if any, after summing the lines. | | ~1 file |
-| ➕ | `export function discountFor(code: string): number` | Looks up a code and returns its percentage, or zero when the code is unknown. |  | |
-
-<details><summary>Signature changes</summary>
-
-```diff
-@@ subtotal @@
-- export function subtotal(lines: Line[]): number
-+ export function subtotal(lines: Line[], code?: string): number
-```
-
-</details>
-
-🟡 `test/cart.test.ts`
-
-| | Change | What it does | Covers | Used in |
-|:-:|---|---|:-:|:-:|
-| 🧪 | applies a percentage code | Checks a ten percent code takes ten percent off the subtotal. | AC 1 | |
-| 🧪 | ignores an unknown code | Checks an unknown code leaves the subtotal as it was. | AC 2 | |
-
-### Pre-flight checks
-
-- [x] Every symbol exists at `790b737`
-- [x] Every changed symbol was read before planning
-- [x] Every acceptance criterion has a test (2/2)
-- [x] Coding standards cited: none apply
-
-<sub>When the PR opens, CI compares it with this plan and fails on missing or unplanned changes.</sub>
 
 <details><summary>Plan data (read by CI, don't edit)</summary>
 

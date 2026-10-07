@@ -417,189 +417,193 @@ let private usedIn (ix: Index.RepoIndex) (s: Sym) =
     let approx = if s.Refs.IsSome then "" else "~"
     match n with 0 -> "—" | 1 -> $"{approx}1 file" | n -> $"{approx}{n} files"
 
-/// GitHub issue body: the same plan as render, laid out with what GitHub draws natively
-/// (alerts, Mermaid, tables, diff blocks, task lists, collapsible sections). Plan data rides along at the end.
+/// GitHub issue body, laid out to read like a user story rather than a PR:
+///   one line of why + stat chips, the map (done when → proved by → code), then ONE block of what
+///   changes, grouped by file: a plain-English line above each exact signature CI enforces.
+/// Everything else (checks, impact, links, story text, plan data) is collapsed.
 let renderIssue (p: Plan) =
     let ix = indexAt p.Repo p.Sha
     let report = check p
     let web = githubUrl p.Repo
     let out = StringBuilder()
     let w (l: string) = out.AppendLine l |> ignore
-    // A code span that survives backticks and table pipes in signatures.
-    let code (s: string) =
-        let s = s.Replace("|", "\\|")
-        let ticks = Regex.Matches(s, "`+") |> Seq.map (fun m -> m.Length) |> Seq.fold max 0
-        let fence = String('`', ticks + 1)
-        if ticks = 0 then fence + s + fence else $"{fence} {s} {fence}"
-    let cell (s: string) = s.Replace("|", "\\|").Replace("\n", " ")
-    let fileLink (path: string) =
-        match web with
-        | Some u -> $"[`{path}`]({u}/blob/{p.Sha}/{path})"
-        | None -> $"`{path}`"
-    let lineLink (path: string) (line: int) (text: string) =
-        match web with
-        | Some u -> $"[{text}]({u}/blob/{p.Sha}/{path}#L{line})"
-        | None -> text
-    let sym h = match ix.ByHandle.TryGetValue h with | true, s -> Some s | _ -> None
+    let blank () = w ""
+    let added = p.Changes |> List.collect Change.added
+    let byFile = p.Changes |> List.groupBy Change.file
+    let fileOfSym (s: NewSym) =
+        p.Changes |> List.tryPick (fun c -> if List.contains s (Change.added c) then Some(Change.file c) else None) |> Option.defaultValue ""
+    let isTest (s: NewSym) = isTestPath (fileOfSym s)
+    let tests = added |> List.filter isTest
     let testTitle (s: NewSym) =
         let m = Regex.Match(s.Sig, @"^\s*(?:it|test)(?:\.\w+)?\s*\(\s*(['""`])(.+?)\1")
         if m.Success then m.Groups[2].Value else (Index.leaf s.Name).Replace('_', ' ')
-    let isTest (file: string) (s: NewSym) = isTestPath file && (not s.Covers.IsEmpty || s.Sig.Contains "it(" || s.Sig.Contains "test(" || s.Sig.Contains "[Fact" || s.Name.Contains "Test")
-    let byFile = p.Changes |> List.groupBy Change.file
-    let fileKind (cs: Change list) =
-        if cs |> List.exists (function NewFile _ -> true | _ -> false) then "add"
-        elif cs |> List.exists (function RemoveFile _ -> true | _ -> false) then "del"
-        else "mod"
-    let dot = function "add" -> "🟢" | "del" -> "🔴" | _ -> "🟡"
+    let leafOf (h: string) = Handle.split h |> Option.map snd |> Option.defaultValue h |> Index.leaf
+    let sym h = match ix.ByHandle.TryGetValue h with | true, s -> Some s | _ -> None
     let fails = report.Findings |> List.filter (fun f -> f.Severity = Fail)
-    let warns = report.Findings |> List.filter (fun f -> f.Severity = Warn)
     let short7 = short p.Sha
-    let shaLink = match web with Some u -> $"[`{short7}`]({u}/commit/{p.Sha})" | None -> $"`{short7}`"
+    let link (path: string) (line: int option) (text: string) =
+        match web with
+        | Some u -> $"[{text}]({u}/blob/{p.Sha}/{path}" + (line |> Option.map (fun l -> $"#L{l}") |> Option.defaultValue "") + ")"
+        | None -> text
+    let counts =
+        let a = p.Changes |> List.sumBy (fun c -> (Change.added c |> List.filter (isTest >> not)).Length)
+        let m = p.Changes |> List.filter (function Alter _ | Touch _ -> true | _ -> false) |> List.length
+        let d = p.Changes |> List.filter (function Remove _ | RemoveFile _ -> true | _ -> false) |> List.length
+        a, m, d
 
-    // Summary banner
-    let status = if report.Ready then "ready for review" else $"**not ready**: {fails.Length} failing checks"
-    let alert = if report.Ready then "NOTE" else "WARNING"
-    w $"> [!{alert}]"
-    w $"> **Pre-PR for {p.Id}**: {p.Why}"
-    w $"> Planned against {shaLink} · {byFile.Length} files · ~{p.Loc} lines · {status}"
-    w ""
-    if p.Story <> "" then
-        w "<details><summary><b>Original story</b></summary>"
-        w ""
-        for l in p.Story.Replace("\r\n", "\n").Split('\n') do w ("> " + l)
-        w ""
-        w "</details>"
-        w ""
+    // ── 1. One line of why, four chips ────────────────────────────────────────────────
+    let a, m, d = counts
+    let status = if report.Ready then "✅ ready" else $"⚠️ {fails.Length} to fix"
+    w $"**{p.Why}**"
+    blank ()
+    let parts =
+        [ $"`{byFile.Length} files`"
+          (if a > 0 then $"`+{a} new`" else "")
+          (if m > 0 then $"`~{m} changed`" else "")
+          (if d > 0 then $"`−{d} removed`" else "")
+          $"`{tests.Length} tests`"
+          status ]
+        |> List.filter ((<>) "")
+    w (String.Join(" ", parts))
+    blank ()
 
-    // Map: criteria on the left point at the tests that prove them; files hold their symbols.
+    // ── 2. The map, read left to right: what "done" means → the test that proves it → the code it exercises.
     let mm (s: string) = s.Replace("\"", "#quot;").Replace("<", "#lt;").Replace(">", "#gt;")
-    let clip (s: string) = if s.Length > 48 then s.Substring(0, 45) + "…" else s
-    w "### Map"
-    w ""
+    let clip n (s: string) = if s.Length > n then s.Substring(0, n - 1) + "…" else s
     w "```mermaid"
     w "flowchart LR"
-    w "  classDef add fill:#dafbe1,stroke:#1a7f37,color:#1f2328"
-    w "  classDef mod fill:#fff8c5,stroke:#9a6700,color:#1f2328"
-    w "  classDef del fill:#ffebe9,stroke:#cf222e,color:#1f2328"
-    w "  classDef ac fill:#ddf4ff,stroke:#0969da,color:#1f2328"
-    w "  classDef test fill:#dafbe1,stroke:#1a7f37,color:#1f2328,stroke-dasharray:4 3"
-    let nodeIds = Collections.Generic.Dictionary<string, string>()
-    byFile
-    |> List.iteri (fun fi (path, cs) ->
-        w $"  subgraph f{fi}[\"{mm (Path.GetFileName path)}\"]"
-        cs
-        |> List.iteri (fun ci c ->
-            let id = $"n{fi}_{ci}"
-            match c with
-            | NewFile(_, _, syms) | Extend(_, syms) ->
-                syms
-                |> List.iteri (fun si s ->
-                    let sid = $"{id}_{si}"
-                    nodeIds[s.Name] <- sid
-                    if isTest path s then w $"    {sid}[\"🧪 {mm (clip (testTitle s))}\"]:::test"
-                    else w $"    {sid}[\"+ {mm (Index.leaf s.Name)}\"]:::add")
-            | Alter(h, _, _) -> w $"    {id}[\"~ {mm (Handle.split h |> Option.map snd |> Option.defaultValue h)}\"]:::mod"
-            | Remove(h, _) -> w $"    {id}[\"− {mm (Handle.split h |> Option.map snd |> Option.defaultValue h)}\"]:::del"
-            | RemoveFile _ -> w $"    {id}[\"− whole file\"]:::del"
-            | Touch(_, why) -> w $"    {id}[\"~ {mm (clip why)}\"]:::mod")
-        w "  end")
-    for n, _, tests in coverage p do
-        w $"  ac{n}([\"AC {n}\"]):::ac"
-        for t in tests do
-            match nodeIds.TryGetValue t.Name with
-            | true, sid -> w $"  ac{n} --> {sid}"
-            | _ -> ()
-    w "```"
-    w ""
-
-    // Acceptance criteria and their proof
+    w "  classDef ac fill:#ddf4ff,stroke:#0969da,color:#0a3069"
+    w "  classDef gap fill:#ffebe9,stroke:#cf222e,color:#a40e26"
+    w "  classDef test fill:#ffffff,stroke:#1a7f37,color:#1a7f37,stroke-dasharray:4 3"
+    w "  classDef add fill:#dafbe1,stroke:#1a7f37,color:#116329"
+    w "  classDef mod fill:#fff8c5,stroke:#9a6700,color:#7d4e00"
+    w "  classDef del fill:#ffebe9,stroke:#cf222e,color:#a40e26"
+    w "  classDef box fill:#ffffff,stroke:#d1d9e0,color:#59636e"
+    let testIds = Collections.Generic.Dictionary<string, string>()
+    let groups = ResizeArray<string>()
     if not p.Criteria.IsEmpty then
-        w "### Acceptance criteria"
-        w ""
-        w "| # | Criterion | Proved by |"
-        w "|:-:|---|---|"
-        let testFile (t: NewSym) =
-            p.Changes |> List.tryPick (fun c -> if List.contains t (Change.added c) then Some(Change.file c) else None)
-        for n, text, tests in coverage p do
-            let proof =
-                match tests with
-                | [] -> "❌ no test"
-                | ts -> "✅ " + String.Join("<br>", ts |> List.map (fun t -> cell (testTitle t)))
-            w $"| {n} | {cell text} | {proof} |"
-        w ""
-
-    // Changes, one table per file
-    w "### Changes"
-    w ""
-    for path, cs in byFile do
-        let kind = fileKind cs
-        let fileWhy = cs |> List.tryPick (function NewFile(_, why, _) | RemoveFile(_, why) -> Some why | _ -> None)
-        w ($"{dot kind} {fileLink path}" + (fileWhy |> Option.map (fun y -> " · " + cell y) |> Option.defaultValue ""))
-        w ""
-        let rows = ResizeArray<string>()
-        let sigDiffs = ResizeArray<string * string * string>()
+        groups.Add "done"
+        w "  subgraph done[\"Done when\"]"
+        for n, text, ts in coverage p do
+            let cls = if ts.IsEmpty then "gap" else "ac"
+            w $"    ac{n}[\"{n}. {mm (clip 70 text)}\"]:::{cls}"
+        w "  end"
+    if not tests.IsEmpty then
+        groups.Add "proof"
+        w "  subgraph proof[\"Proved by\"]"
+        tests |> List.iteri (fun i t ->
+            testIds[t.Name] <- $"t{i}"
+            w $"    t{i}([\"🧪 {mm (clip 48 (testTitle t))}\"]):::test")
+        w "  end"
+    let codeFiles = byFile |> List.filter (fun (path, _) -> not (isTestPath path))
+    let codeIds = ResizeArray<string>()
+    if not codeFiles.IsEmpty then
+        groups.Add "code"
+        w "  subgraph code[\"Code\"]"
+        codeFiles |> List.iteri (fun fi (path, cs) ->
+            groups.Add $"f{fi}"
+            w $"    subgraph f{fi}[\"{mm (Path.GetFileName path)}\"]"
+            let node (id: string) (label: string) (cls: string) =
+                codeIds.Add id
+                w $"      {id}[\"{mm label}\"]:::{cls}"
+            cs |> List.iteri (fun ci c ->
+                match c with
+                | NewFile(_, _, syms) | Extend(_, syms) ->
+                    syms |> List.iteri (fun si s -> node $"c{fi}_{ci}_{si}" ("+ " + Index.leaf s.Name) "add")
+                | Alter(h, _, _) -> node $"c{fi}_{ci}" ("~ " + leafOf h) "mod"
+                | Remove(h, _) -> node $"c{fi}_{ci}" ("− " + leafOf h) "del"
+                | RemoveFile _ -> node $"c{fi}_{ci}" "− file" "del"
+                | Touch(_, why) -> node $"c{fi}_{ci}" ("~ " + clip 30 why) "mod")
+            w "    end")
+        w "  end"
+    for n, _, ts in coverage p do
+        for t in ts do
+            match testIds.TryGetValue t.Name with
+            | true, id -> w $"  ac{n} --> {id}"
+            | _ -> ()
+    // One faint link carries the eye from the proof column to the code column.
+    if testIds.Count > 0 && codeIds.Count > 0 then w "  proof -.- code"
+    if groups.Count > 0 then w ("  class " + String.Join(",", groups) + " box")
+    w "```"
+    blank ()
+    // ── 3. What changes: one block, grouped by file. Each plain-English line sits above the exact
+    //    signature it describes; the signatures are the contract CI holds the PR to.
+    w "#### What changes <sub>🔒 CI fails the PR if the code doesn't match</sub>"
+    w "```diff"
+    let say (s: string) = w ("  // " + s.Trim().TrimEnd('.') + ".")
+    let proves (s: NewSym) =
+        if s.Covers.IsEmpty then "" else "   ✓ " + String.Join(" ", s.Covers |> List.map (fun n -> $"#{n}"))
+    let shown (s: NewSym) = if isTest s then $"test '{testTitle s}'" else s.Sig.Trim().TrimEnd('{').TrimEnd()
+    // Tests read as their title, with the criteria they prove lined up in one column.
+    let addLines (syms: NewSym list) =
+        let width = syms |> List.filter (fun s -> not s.Covers.IsEmpty) |> List.map (shown >> String.length) |> List.fold max 0
+        for s in syms do
+            if not (isTest s) then say s.Does
+            let line = shown s
+            w ("+ " + (if s.Covers.IsEmpty then line else line.PadRight width) + proves s)
+    let sigOr h = sym h |> Option.map (fun s -> s.Sig) |> Option.defaultValue (leafOf h)
+    byFile |> List.iteri (fun i (path, cs) ->
+        if i > 0 then blank ()
+        let tag =
+            if cs |> List.exists (function NewFile _ -> true | _ -> false) then "  new file"
+            elif cs |> List.exists (function RemoveFile _ -> true | _ -> false) then "  deleted"
+            else ""
+        w $"@@ {path}{tag} @@"
         for c in cs do
             match c with
-            | NewFile(_, _, syms) | Extend(_, syms) ->
-                for s in syms do
-                    let covers = if s.Covers.IsEmpty then "" else String.Join(", ", s.Covers |> List.map (fun n -> $"AC {n}"))
-                    if isTest path s then rows.Add $"| 🧪 | {cell (testTitle s)} | {cell s.Does} | {covers} | |"
-                    else rows.Add $"| ➕ | {code s.Sig} | {cell s.Does} | {covers} | |"
-            | Alter(h, newSig, change) ->
-                let s = sym h
-                let label = s |> Option.map (fun s -> code s.Sig) |> Option.defaultValue (code h)
-                let label = match s with Some s -> lineLink s.File s.Decl label | None -> label
-                let used = s |> Option.map (fun s -> usedIn ix s) |> Option.defaultValue ""
-                rows.Add $"| ✏️ | {label} | {cell change} | | {used} |"
-                match newSig, s with
-                | Some ns, Some s -> sigDiffs.Add(Index.leaf s.Name, s.Sig, ns)
-                | _ -> ()
+            | NewFile(_, why, syms) ->
+                say why
+                addLines syms
+            | Extend(_, syms) -> addLines syms
+            | Alter(h, Some ns, change) ->
+                say change
+                w $"- {sigOr h}"
+                w $"+ {ns}"
+            | Alter(h, None, change) ->
+                say change
+                w $"! {sigOr h}"
             | Remove(h, why) ->
-                let s = sym h
-                let label = s |> Option.map (fun s -> code s.Sig) |> Option.defaultValue (code h)
-                let used = s |> Option.map (fun s -> usedIn ix s) |> Option.defaultValue ""
-                rows.Add $"| ➖ | {label} | {cell why} | | {used} |"
-            | RemoveFile _ -> rows.Add "| ➖ | whole file | Deleted. | | |"
-            | Touch(_, why) -> rows.Add $"| ✏️ | | {cell why} | | |"
-        w "| | Change | What it does | Covers | Used in |"
-        w "|:-:|---|---|:-:|:-:|"
-        rows |> Seq.iter w
-        if sigDiffs.Count > 0 then
-            w ""
-            w "<details><summary>Signature changes</summary>"
-            w ""
-            w "```diff"
-            for name, before, after in sigDiffs do
-                w $"@@ {name} @@"
-                w $"- {before}"
-                w $"+ {after}"
-            w "```"
-            w ""
-            w "</details>"
-        w ""
+                say why
+                w $"- {sigOr h}"
+            | RemoveFile(_, why) -> say why
+            | Touch(_, why) -> say why)
+    w "```"
+    blank ()
 
-    // Pre-flight checklist
+    // ── 6. Collapsed detail for anyone who wants it ───────────────────────────────────
     let failing code = fails |> List.exists (fun f -> f.Code = code)
-    let check (ok: bool) (text: string) = w (if ok then $"- [x] {text}" else $"- [ ] **{text}**")
-    w "### Pre-flight checks"
-    w ""
-    check (not (failing "ref")) $"Every symbol exists at `{short7}`"
-    check (not (failing "inspect")) "Every changed symbol was read before planning"
-    if not p.Criteria.IsEmpty then
-        let covered = coverage p |> List.filter (fun (_, _, t) -> not t.IsEmpty) |> List.length
-        check (not (failing "criteria")) $"Every acceptance criterion has a test ({covered}/{p.Criteria.Length})"
+    let tick ok = if ok then "✅" else "❌"
+    let covered = coverage p |> List.filter (fun (_, _, t) -> not t.IsEmpty) |> List.length
     let standards = if p.Standards.IsEmpty then "none apply" else String.Join(", ", p.Standards |> List.map (fun s -> $"`{s}`"))
-    check (not (failing "standard" || failing "standards")) $"Coding standards cited: {standards}"
+    w "<details><summary>Checks, impact and story</summary>"
+    blank ()
+    let ok code = tick (not (failing code))
+    let okRef, okInspect, okCriteria, okStandard = ok "ref", ok "inspect", ok "criteria", ok "standard"
+    w $"{okRef} every symbol exists at `{short7}` · {okInspect} every change was read first · {okCriteria} {covered}/{p.Criteria.Length} criteria have a test · {okStandard} standards: {standards}"
     for f in fails |> List.filter (fun f -> not (List.contains f.Code [ "ref"; "inspect"; "criteria"; "standard"; "standards" ])) do
-        check false f.Message
-    if not warns.IsEmpty then
-        w ""
-        w "> [!WARNING]"
-        for f in warns do w $"> {cell f.Message}  "
-    w ""
-    w "<sub>When the PR opens, CI compares it with this plan and fails on missing or unplanned changes.</sub>"
+        w $"❌ {f.Message}"
+    let impacted =
+        p.Changes
+        |> List.choose (function
+            | Alter(h, _, _) | Remove(h, _) ->
+                sym h |> Option.map (fun s ->
+                    let name = "`" + leafOf h + "`"
+                    $"{link s.File (Some s.Decl) name} used in {usedIn ix s}")
+            | _ -> None)
+    if not impacted.IsEmpty then
+        blank ()
+        w ("Impact: " + String.Join(" · ", impacted))
+    if web.IsSome then
+        blank ()
+        let existing = byFile |> List.filter (fun (_, cs) -> not (cs |> List.exists (function NewFile _ -> true | _ -> false)))
+        let files = existing |> List.map (fun (path, _) -> link path None ("`" + Path.GetFileName path + "`"))
+        if not files.IsEmpty then w ($"Files at `{short7}`: " + String.Join(" · ", files))
+    if p.Story <> "" then
+        blank ()
+        for l in p.Story.Replace("\r\n", "\n").Split('\n') do w ("> " + l)
+    blank ()
+    w "</details>"
     out.ToString()
-
 /// The issue-body form of a plan: the rendered pre-PR, then the plan JSON in a fenced block tagged
 /// `json storyplan-v1` so CI can read it back. GitHub highlights it as JSON; no HTML comment needed.
 module IssueBody =

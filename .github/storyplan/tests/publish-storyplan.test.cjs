@@ -64,7 +64,8 @@ const core = { ...global.core, setOutput: (k, v) => (outputs[k] = v), summary: {
   assert.deepEqual(created.labels, ["pre-pr"]);
   assert.equal(created.body.trimEnd(), raw.trimEnd(), "gh-aw's sanitizer leaves the rendered pre-PR unchanged");
   assert.match(created.body, /```mermaid\nflowchart LR/);
-  assert.match(created.body, /- \[x\] Every acceptance criterion has a test \(2\/2\)/);
+  assert.match(created.body, /✅ 2\/2 criteria have a test/);
+  assert.match(created.body, /\+ test 'ignores an unknown code' +✓ #2/);
   const plan = extractPlan(created.body);
   assert.equal(plan.id, ID);
   assert.equal(plan.criteria.length, 2);
