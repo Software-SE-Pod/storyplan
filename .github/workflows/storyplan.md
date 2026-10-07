@@ -20,6 +20,8 @@ permissions:
 
 engine:
   id: copilot
+  # `auto` can resolve to a utility model the chat endpoint rejects; pin a frontier alias.
+  model: sonnet
 
 strict: true
 
