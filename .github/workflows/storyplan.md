@@ -15,11 +15,10 @@ on:
 permissions:
   contents: read
   issues: read
+  # Copilot inference is billed to the organization through the Actions token: no PAT, no secret.
+  copilot-requests: write
 
 engine:
-  # Inference uses the COPILOT_GITHUB_TOKEN secret (a fine-grained PAT with Copilot Requests: Read), which
-  # works in a user-owned public repository. In an organization with Copilot billing, use
-  # `permissions: copilot-requests: write` instead and drop the secret.
   id: copilot
 
 strict: true

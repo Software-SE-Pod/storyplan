@@ -6,7 +6,7 @@
 #
 # Use from any repository:
 #   imports:
-#     - uses: garrettlondon1/storyplan/.github/workflows/shared/storyplan.md@main
+#     - uses: Software-SE-Pod/storyplan/.github/workflows/shared/storyplan.md@main
 #       with:
 #         ref: main            # StoryPlan version (tag, branch or SHA) to build
 #
@@ -25,7 +25,7 @@ import-schema:
     type: string
     required: false
     default: main
-    description: Git ref of garrettlondon1/storyplan to build.
+    description: Git ref of Software-SE-Pod/storyplan to build.
 
 mcp-servers:
   storyplan:
@@ -55,7 +55,7 @@ steps:
     run: |
       set -euo pipefail
       src="${RUNNER_TEMP}/storyplan-src"
-      git clone --quiet --filter=blob:none https://github.com/garrettlondon1/storyplan.git "${src}"
+      git clone --quiet --filter=blob:none https://github.com/Software-SE-Pod/storyplan.git "${src}"
       git -C "${src}" checkout --quiet "${STORYPLAN_REF}"
       dotnet publish "${src}/src/StoryPlan.Mcp/StoryPlan.Mcp.fsproj" -c Release -o "${RUNNER_TEMP}/storyplan" --nologo -v q
       echo "StoryPlan $(git -C "${src}" rev-parse --short HEAD) built"
@@ -120,7 +120,7 @@ safe-outputs:
             STORYPLAN_REF: ${{ github.aw.import-inputs.ref }}
           run: |
             set -euo pipefail
-            git clone --quiet --filter=blob:none https://github.com/garrettlondon1/storyplan.git "${RUNNER_TEMP}/storyplan-src"
+            git clone --quiet --filter=blob:none https://github.com/Software-SE-Pod/storyplan.git "${RUNNER_TEMP}/storyplan-src"
             git -C "${RUNNER_TEMP}/storyplan-src" checkout --quiet "${STORYPLAN_REF}"
         - name: Download StoryPlan pre-PR
           uses: actions/download-artifact@v8.0.1

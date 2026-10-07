@@ -48,9 +48,10 @@ on:
 permissions:
   contents: read
   issues: read
+  copilot-requests: write
 engine: copilot
 imports:
-  - uses: garrettlondon1/storyplan/.github/workflows/shared/storyplan.md@main
+  - uses: Software-SE-Pod/storyplan/.github/workflows/shared/storyplan.md@main
     with:
       ref: main
 tools:
@@ -62,14 +63,9 @@ safe-outputs:
 Plan story #${{ github.event.issue.number }} with StoryPlan (see this repository's storyplan.md for the full prompt).
 ```
 
-Then:
+Then run `gh aw compile`. No PAT or secret is needed: `copilot-requests: write` bills Copilot to the organization through the Actions token. The repository must be owned by an organization with a Copilot plan and the policy "Allow use of Copilot CLI billed to the organization" turned on. In a personal repository, drop that permission and set a `COPILOT_GITHUB_TOKEN` secret instead (a fine-grained PAT with Copilot Requests: Read).
 
-```bash
-gh aw compile
-gh aw secrets set COPILOT_GITHUB_TOKEN --value "<fine-grained PAT with Copilot Requests: Read>"
-```
-
-In an organization with Copilot billing, use `permissions: copilot-requests: write` instead of the secret. Copy `storyplan-verify.yml` to get the PR gate.
+Copy `storyplan-verify.yml` to get the PR gate.
 
 Coding standards live in `.storyplan/standards.json`. Each rule has a glob and one of four deterministic checks: `forbid`, `precededBy`, `firstLine` or `captureMatches`. See [this repository's rules](.storyplan/standards.json).
 
