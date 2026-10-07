@@ -1,0 +1,37 @@
+[
+  {
+    "id": "FS.ModuleDoc",
+    "text": "Every F# module opens with a /// summary of what it is for",
+    "exemplar": "src/StoryPlan.Core/Git.fs:1",
+    "glob": "src/**/*.fs",
+    "check": { "kind": "precededBy", "line": "^module ", "prev": "^///" }
+  },
+  {
+    "id": "CORE.NoConsole",
+    "text": "StoryPlan.Core never writes to the console; it returns values and the MCP or CLI layer prints them",
+    "exemplar": "src/StoryPlan.Core/Tools.fs",
+    "glob": "src/StoryPlan.Core/**/*.fs",
+    "check": { "kind": "forbid", "pattern": "\\b(e?printfn?|Console\\.)" }
+  },
+  {
+    "id": "CORE.ResultNotThrow",
+    "text": "Engine operations report failure as Result.Error with a message that says how to fix it, not by throwing",
+    "exemplar": "src/StoryPlan.Core/Engine.fs",
+    "glob": "src/StoryPlan.Core/Engine.fs",
+    "check": { "kind": "forbid", "pattern": "\\b(failwith|failwithf|raise)\\b" }
+  },
+  {
+    "id": "TEST.SentenceNames",
+    "text": "Tests are named as sentences in double backticks: ``add rejects unknown handles``",
+    "exemplar": "tests/StoryPlan.Tests/EngineTests.fs",
+    "glob": "tests/**/*.fs",
+    "check": { "kind": "captureMatches", "line": "^let ``([^`]+)``", "capture": "\\s" }
+  },
+  {
+    "id": "JS.NodePrefix",
+    "text": "Workflow scripts import Node built-ins with the node: prefix",
+    "exemplar": ".github/storyplan/publish-storyplan.cjs:7",
+    "glob": ".github/storyplan/**/*.cjs",
+    "check": { "kind": "forbid", "pattern": "require\\([\"'](fs|path|os|assert|child_process|crypto)[\"']" }
+  }
+]

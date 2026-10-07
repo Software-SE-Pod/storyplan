@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>StoryPlan · MCP Apps host harness</title>
+<style>
+  body { margin: 0; font: 13px system-ui, sans-serif; background: #e9ecef; color: #1f2328; display: grid; grid-template-columns: 1fr 360px; height: 100vh; }
+  .chat { padding: 16px; overflow: auto; }
+  .bubble { background: #fff; border-radius: 12px; padding: 10px 12px; max-width: 900px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .bubble p { margin: 0 0 8px; color: #59636e; }
+  iframe { width: 100%; border: 1px solid #d1d9e0; border-radius: 10px; background: #fff; height: 200px; }
+  aside { background: #16181d; color: #c9d1d9; overflow: auto; padding: 10px; font: 11.5px ui-monospace, Consolas, monospace; }
+  aside div { padding: 2px 0; border-bottom: 1px solid #2a2f37; white-space: pre-wrap; word-break: break-all; }
+  .in { color: #7ee787; } .out { color: #79c0ff; }
+</style>
+</head>
+<body>
+<div class="chat"><div class="bubble"><p id="caption">Assistant called <code>plan_show</code></p><iframe id="view" sandbox="allow-scripts" title="StoryPlan view"></iframe></div></div>
+<aside id="log" aria-label="JSON-RPC log"></aside>
+<script>
+// Minimal MCP Apps host (SEP-1865) for exercising the view outside a chat client:
+// sandboxed iframe, ui/initialize handshake, tool-input/tool-result, and tools/call proxied to the local server.
+(async () => {
+  const params = new URLSearchParams(location.search);
+  const planId = params.get("plan");
+  const tool = params.get("tool") || "plan_show";
+  const theme = params.get("theme") || "light";
+  const frame = document.getElementById("view");
+  const log = (dir, m) => {
+    const d = document.createElement("div");
+    d.className = dir; d.textContent = (dir === "in" ? "view → host " : "host → view ") + JSON.stringify(m);
+    document.getElementById("log").append(d);
+  };
+  const send = (m) => { log("out", m); frame.contentWindow.postMessage(m, "*"); };
+  const callServer = async (name, args) => {
+    const r = await fetch("/api/tools/" + encodeURIComponent(name), {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(args || {})
+    });
+    return r.json();
+  };
+  document.getElementById("caption").textContent = `Assistant called ${tool} for ${planId}`;
+
+  window.addEventListener("message", async (e) => {
+    if (e.source !== frame.contentWindow) return;
+    const m = e.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    log("in", m);
+    if (m.method === "ui/initialize") {
+      send({ jsonrpc: "2.0", id: m.id, result: {
+        protocolVersion: "2026-01-26",
+        hostCapabilities: { serverTools: {}, logging: {} },
+        hostInfo: { name: "storyplan-harness", version: "0.1.0" },
+        hostContext: { theme, displayMode: "inline", availableDisplayModes: ["inline"], containerDimensions: { maxHeight: 6000 } }
+      }});
+    } else if (m.method === "ui/notifications/initialized") {
+      const args = { id: planId };
+      send({ jsonrpc: "2.0", method: "ui/notifications/tool-input", params: { arguments: args } });
+      const result = await callServer(tool, args);
+      send({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: result });
+    } else if (m.method === "tools/call") {
+      const result = await callServer(m.params.name, m.params.arguments);
+      send({ jsonrpc: "2.0", id: m.id, result });
+    } else if (m.method === "ui/notifications/size-changed") {
+      frame.style.height = Math.min(m.params.height + 4, 6000) + "px";
+    } else if (m.id != null) {
+      send({ jsonrpc: "2.0", id: m.id, error: { code: -32601, message: "not supported by harness: " + m.method } });
+    }
+  });
+
+  frame.srcdoc = await (await fetch("/ui")).text();
+})();
+</script>
+</body>
+</html>

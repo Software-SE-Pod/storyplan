@@ -1,0 +1,66 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build and test
+        run: dotnet test tests/StoryPlan.Tests -c Release
+      - name: Schema and CLI work
+        run: |
+          dotnet run --project src/StoryPlan.Mcp -c Release --no-build -- schema plan > /dev/null
+          dotnet pack src/StoryPlan.Mcp -c Release -o out/packages --nologo
+
+  publisher:
+    # The safe-output job script, against gh-aw's real sanitizer at the version the workflow pins.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24"
+      - name: Publish job tests
+        run: |
+          set -euo pipefail
+          git -c advice.detachedHead=false clone --quiet --depth 1 --branch v0.88.8 --filter=blob:none --sparse https://github.com/github/gh-aw.git "${RUNNER_TEMP}/gh-aw"
+          git -C "${RUNNER_TEMP}/gh-aw" sparse-checkout set actions/setup/js
+          node .github/storyplan/tests/publish-storyplan.test.cjs .github/storyplan/tests/fixtures "${RUNNER_TEMP}/gh-aw/actions/setup/js"
+
+  workflows:
+    # Lock files must match their source: recompile and fail on any difference.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install gh-aw
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh extension install github/gh-aw --pin v0.88.8
+      - name: Compile (strict) and compare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh aw compile --strict
+          git diff --exit-code -- .github/workflows

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StoryPlan</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    color-scheme: light dark;
+    --color-background-primary: light-dark(#ffffff, #16181d);
+    --color-background-secondary: light-dark(#f6f8fa, #1d2026);
+    --color-background-tertiary: light-dark(#eef1f4, #262a33);
+    --color-background-success: light-dark(#dafbe1, #13261d);
+    --color-background-danger: light-dark(#ffebe9, #2a171b);
+    --color-background-warning: light-dark(#fff8c5, #2a2314);
+    --color-background-info: light-dark(#ddf4ff, #12203a);
+    --color-text-primary: light-dark(#1f2328, #e6edf3);
+    --color-text-secondary: light-dark(#59636e, #9198a1);
+    --color-text-tertiary: light-dark(#818b98, #6e7681);
+    --color-text-success: light-dark(#1a7f37, #3fb950);
+    --color-text-danger: light-dark(#cf222e, #f85149);
+    --color-text-warning: light-dark(#9a6700, #d29922);
+    --color-text-info: light-dark(#0969da, #4493f8);
+    --color-border-primary: light-dark(#d1d9e0, #3d444d);
+    --color-border-secondary: light-dark(#e6eaef, #2a2f37);
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    --font-text-sm-size: 12px;
+    --font-text-md-size: 14px;
+    --font-heading-md-size: 18px;
+    --border-radius-sm: 6px;
+    --border-radius-md: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--color-background-primary); color: var(--color-text-primary);
+    font-family: var(--font-sans); font-size: var(--font-text-md-size); line-height: 1.45; }
+  button { font: inherit; color: inherit; cursor: pointer; border: 1px solid var(--color-border-primary);
+    background: var(--color-background-secondary); border-radius: var(--border-radius-sm); padding: 4px 10px; }
+  button:hover { background: var(--color-background-tertiary); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--color-text-success); color: #fff; border-color: transparent; }
+  code, .mono { font-family: var(--font-mono); font-size: 12.5px; }
+
+  .shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+  .shell.app { grid-template-columns: 1fr; min-height: 0; }
+  nav { border-right: 1px solid var(--color-border-primary); background: var(--color-background-secondary); padding: 12px; }
+  nav h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-secondary); margin: 4px 4px 10px; }
+  nav a { display: block; padding: 6px 8px; border-radius: var(--border-radius-sm); color: inherit; text-decoration: none; }
+  nav a:hover, nav a.on { background: var(--color-background-tertiary); }
+  nav a small { display: block; color: var(--color-text-secondary); font-size: 11.5px; }
+  main { padding: 16px 18px 20px; min-width: 0; }
+
+  header .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  header h1 { font-size: var(--font-heading-md-size); margin: 0; font-weight: 600; }
+  .why { color: var(--color-text-secondary); margin: 4px 0 8px; }
+  .meta { color: var(--color-text-secondary); font-size: var(--font-text-sm-size); display: flex; gap: 12px; flex-wrap: wrap; }
+  .meta b { color: var(--color-text-primary); font-weight: 600; }
+  .actions { display: flex; gap: 6px; margin-left: auto; }
+  .pill { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--color-border-primary); white-space: nowrap; }
+  .pill.id { font-family: var(--font-mono); }
+  .pill.ok { color: var(--color-text-success); background: var(--color-background-success); border-color: transparent; }
+  .pill.bad { color: var(--color-text-danger); background: var(--color-background-danger); border-color: transparent; }
+  .pill.info { color: var(--color-text-info); background: var(--color-background-info); border-color: transparent; }
+
+  section { margin-top: 18px; }
+  section > h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-secondary); margin: 0 0 8px; }
+
+  .file { border: 1px solid var(--color-border-primary); border-radius: var(--border-radius-md); margin-bottom: 10px; overflow: hidden; }
+  .file > .head { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--color-background-secondary);
+    border-bottom: 1px solid var(--color-border-primary); }
+  .file > .head .path { font-family: var(--font-mono); font-size: 12.5px; overflow-wrap: anywhere; }
+  .mark { font-family: var(--font-mono); font-weight: 700; width: 18px; height: 18px; display: inline-grid; place-items: center;
+    border-radius: 4px; font-size: 12px; flex: none; }
+  .mark.add { color: var(--color-text-success); background: var(--color-background-success); }
+  .mark.mod { color: var(--color-text-warning); background: var(--color-background-warning); }
+  .mark.del { color: var(--color-text-danger); background: var(--color-background-danger); }
+  .change { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; padding: 8px 10px; border-top: 1px solid var(--color-border-secondary); }
+  .file > .change:nth-child(2) { border-top: none; }
+  .line { font-family: var(--font-mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; padding: 1px 6px; border-radius: 4px; }
+  .line.add { background: var(--color-background-success); }
+  .line.del { background: var(--color-background-danger); }
+  .line.mod { background: var(--color-background-warning); }
+  .line.note { color: var(--color-text-secondary); font-family: var(--font-sans); }
+  .does { margin: 3px 0 2px 18px; color: var(--color-text-secondary); }
+  .owner { float: right; margin-left: 12px; font-family: var(--font-sans); font-size: 11px; color: var(--color-text-tertiary); }
+  .side { display: flex; gap: 6px; align-items: start; }
+  .chip { font-size: 11px; color: var(--color-text-secondary); border: 1px solid var(--color-border-primary); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
+  .x { border: none; background: none; color: var(--color-text-tertiary); padding: 0 4px; font-size: 15px; line-height: 1; }
+  .x:hover { color: var(--color-text-danger); background: none; }
+
+  .criteria { margin: 0; padding-left: 22px; }
+  details.story { margin-top: 12px; }
+  details.story summary { cursor: pointer; color: var(--color-text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .story-text { white-space: pre-wrap; margin-top: 6px; padding: 8px 10px; border-left: 3px solid var(--color-border-primary); color: var(--color-text-secondary); }
+  .criteria li { padding: 4px 0; }
+  .criteria .cov { margin-left: 10px; font-size: 12px; white-space: nowrap; }
+  .chip.covers { display: inline-block; margin: 2px 0 0 18px; }
+  .yes { color: var(--color-text-success); } .no { color: var(--color-text-danger); } .mid { color: var(--color-text-warning); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .findings { list-style: none; margin: 0; padding: 0; }
+  .findings li { display: flex; gap: 8px; padding: 5px 8px; border-radius: var(--border-radius-sm); margin-bottom: 3px; }
+  .findings li.fail { background: var(--color-background-danger); }
+  .findings li.warn { background: var(--color-background-warning); }
+  .findings li.pass { background: var(--color-background-success); }
+  .findings .code { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-text-secondary); min-width: 70px; }
+  .empty, .error { color: var(--color-text-secondary); padding: 24px 0; }
+  .error { color: var(--color-text-danger); }
+  .toast { position: fixed; right: 12px; bottom: 12px; max-width: 70%; background: var(--color-background-tertiary);
+    border: 1px solid var(--color-border-primary); border-radius: var(--border-radius-sm); padding: 8px 12px; white-space: pre-wrap; font-size: 12.5px; }
+  footer { margin-top: 18px; color: var(--color-text-tertiary); font-size: 11.5px; overflow-wrap: anywhere; }
+  @media (max-width: 640px) { .shell { grid-template-columns: 1fr; } nav { display: none; } }
+</style>
+</head>
+<body>
+<div class="shell" id="shell">
+  <nav id="nav" hidden><h2>Plans</h2><div id="plans"></div></nav>
+  <main id="main"><div class="empty">Loading plan…</div></main>
+</div>
+<script>
+(() => {
+  "use strict";
+  // One view, two transports: inside an MCP Apps host it speaks JSON-RPC over postMessage;
+  // opened directly (storyplan serve) it calls the same tools over local HTTP.
+  const inHost = window.parent !== window;
+  const state = { view: null, input: null, armed: false };
+  const $ = (id) => document.getElementById(id);
+
+  function h(tag, attrs, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v == null || v === false) continue;
+      if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else if (k === "class") el.className = v;
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false) el.append(kid instanceof Node ? kid : String(kid));
+    return el;
+  }
+  function toast(text, ms = 3500) {
+    const t = h("div", { class: "toast", role: "status" }, text);
+    document.body.append(t);
+    setTimeout(() => t.remove(), ms);
+  }
+
+  // ---------- transport ----------
+  let nextId = 0;
+  const pending = new Map();
+  function request(method, params) {
+    const id = ++nextId;
+    window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
+    return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+  }
+  const notify = (method, params) => window.parent.postMessage({ jsonrpc: "2.0", method, params }, "*");
+  const reply = (id, result) => window.parent.postMessage({ jsonrpc: "2.0", id, result }, "*");
+
+  async function callTool(name, args) {
+    if (inHost) return request("tools/call", { name, arguments: args });
+    const r = await fetch("/api/tools/" + encodeURIComponent(name), {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(args)
+    });
+    if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
+    return r.json();
+  }
+  const textOf = (res) => (res?.content || []).filter(c => c.type === "text").map(c => c.text).join("\n");
+
+  window.addEventListener("message", (e) => {
+    if (e.source !== window.parent) return;
+    const m = e.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.id != null && !m.method) {
+      const p = pending.get(m.id);
+      if (p) { pending.delete(m.id); m.error ? p.reject(new Error(m.error.message || "host error")) : p.resolve(m.result); }
+      return;
+    }
+    switch (m.method) {
+      case "ui/notifications/tool-input":
+        state.input = m.params?.arguments || null;
+        if (!state.view) $("main").replaceChildren(h("div", { class: "empty" }, `Loading plan ${state.input?.id ?? ""}…`));
+        break;
+      case "ui/notifications/tool-result": onResult(m.params); break;
+      case "ui/notifications/tool-cancelled":
+        $("main").replaceChildren(h("div", { class: "error" }, "Cancelled: " + (m.params?.reason || ""))); break;
+      case "ui/notifications/host-context-changed": applyContext(m.params); break;
+      case "ui/resource-teardown": case "ping": if (m.id != null) reply(m.id, {}); break;
+    }
+  });
+
+  function applyContext(ctx) {
+    if (!ctx) return;
+    if (ctx.theme) document.documentElement.style.colorScheme = ctx.theme;
+    for (const [k, v] of Object.entries(ctx.styles?.variables || {})) if (v) document.documentElement.style.setProperty(k, v);
+    if (ctx.styles?.css?.fonts) document.head.append(h("style", {}, ctx.styles.css.fonts));
+  }
+
+  function onResult(res) {
+    if (res?.isError) toast(textOf(res) || "Tool failed");
+    const sc = res?.structuredContent;
+    if (sc?.plan) { state.view = sc; state.armed = false; render(); }
+    else if (!state.view && !res?.isError) $("main").replaceChildren(h("pre", { class: "mono" }, textOf(res)));
+  }
+
+  async function run(name, args, { refresh = true } = {}) {
+    try {
+      const res = await callTool(name, args);
+      if (res?.structuredContent?.plan) return onResult(res);
+      if (res?.isError) toast(textOf(res));
+      else toast(textOf(res).split("\n").slice(0, 2).join("\n"));
+      if (refresh && state.view) onResult(await callTool("plan_show", { id: state.view.plan.id }));
+    } catch (err) { toast(String(err.message || err)); }
+  }
+
+  // ---------- render ----------
+  const fileOf = (c) => c.path || c.file || (c.symbol || "").split("#")[0];
+  const nameOf = (handle) => (handle || "").split("#").slice(1).join("#");
+  const where = (name) => h("span", { class: "owner", title: "Symbol name in the index" }, name);
+  const says = (text) => (text ? h("div", { class: "does" }, text) : null);
+  const covers = (s) => (s.covers && s.covers.length
+    ? h("span", { class: "chip covers", title: "Story criteria this test proves" }, "covers " + s.covers.join(", ")) : null);
+  const added = (s) => [h("div", { class: "line add" }, "+ " + s.sig, where(s.name)), says(s.does), covers(s)];
+
+  function changeRow(c, index, plan, symbols) {
+    const draft = plan.status === "draft";
+    const remove = draft ? h("button", { class: "x", title: "Remove from plan", "aria-label": "Remove change " + index,
+      onclick: () => run("plan_remove", { id: plan.id, index }) }, "×") : null;
+    const info = symbols[c.symbol] || {};
+    const refs = info.refs != null ? h("span", { class: "chip", title: "Other files referencing this symbol" }, `${info.refs} refs`) : null;
+    const sig = info.sig || nameOf(c.symbol);
+    let body;
+    switch (c.kind) {
+      case "newFile": body = [says(c.why), c.syms.map(added)]; break;
+      case "extend": body = c.syms.map(added); break;
+      case "alter":
+        body = c.newSig
+          ? [h("div", { class: "line del" }, "- " + sig, where(nameOf(c.symbol))), h("div", { class: "line add" }, "+ " + c.newSig), says(c.change)]
+          : [h("div", { class: "line mod" }, "~ " + sig, where(nameOf(c.symbol))), says(c.change)];
+        break;
+      case "remove": body = [h("div", { class: "line del" }, "- " + sig, where(nameOf(c.symbol))), says(c.why)]; break;
+      case "removeFile": body = [says("Delete this file. " + c.why)]; break;
+      case "touch": body = [h("div", { class: "line mod" }, "~ " + c.why)]; break;
+      default: body = [h("div", { class: "line" }, JSON.stringify(c))];
+    }
+    return h("div", { class: "change", "data-kind": c.kind }, h("div", {}, body), h("div", { class: "side" }, refs, remove));
+  }
+
+  function render() {
+    const { plan, check, symbols = {}, markdown } = state.view;
+    const groups = new Map();
+    plan.changes.forEach((c, i) => {
+      const f = fileOf(c);
+      if (!groups.has(f)) groups.set(f, []);
+      groups.get(f).push([c, i]);
+    });
+    const markOf = (cs) => cs.some(([c]) => c.kind === "newFile") ? ["add", "+"]
+      : cs.some(([c]) => c.kind === "removeFile") ? ["del", "−"] : ["mod", "~"];
+    const counts = { add: 0, mod: 0, del: 0 };
+    for (const cs of groups.values()) counts[markOf(cs)[0]]++;
+    const tests = plan.changes.flatMap(c => c.syms || []);
+    const criteria = (plan.criteria || []).map((text, i) => [i + 1, text, tests.filter(t => (t.covers || []).includes(i + 1))]);
+    const ready = check?.ready;
+    const published = plan.status === "published";
+
+    const publishBtn = published ? null : h("button", {
+      class: state.armed ? "primary" : "", disabled: !ready, title: ready ? "Write .stories/" + plan.id + ".plan.json to the repo" : "Fix the failing gates first",
+      onclick: () => {
+        if (!state.armed) { state.armed = true; return render(); }
+        state.armed = false;
+        run("plan_publish", { id: plan.id, target: "repo" });
+      }
+    }, state.armed ? "Confirm publish" : "Publish");
+
+    const header = h("header", {},
+      h("div", { class: "row" },
+        h("span", { class: "pill id" }, plan.id),
+        h("h1", {}, plan.title),
+        h("span", { class: "pill" + (published ? " info" : "") }, plan.status),
+        check ? h("span", { class: "pill " + (ready ? "ok" : "bad") }, ready ? "Ready" : "Not ready") : null,
+        h("div", { class: "actions" },
+          h("button", { onclick: () => run("plan_check", { id: plan.id }, { refresh: false }) }, "Re-check"),
+          h("button", { onclick: () => copy(markdown) }, "Copy markdown"),
+          publishBtn)),
+      plan.why ? h("p", { class: "why" }, plan.why) : null,
+      h("div", { class: "meta" },
+        h("span", {}, "base ", h("b", { class: "mono" }, plan.sha.slice(0, 7))),
+        h("span", {}, h("b", {}, groups.size), " files  ",
+          h("span", { class: "yes" }, `+${counts.add}`), " ", h("span", { class: "mid" }, `~${counts.mod}`), " ", h("span", { class: "no" }, `−${counts.del}`)),
+        h("span", {}, "~", h("b", {}, plan.loc), " LOC"),
+        h("span", {}, h("b", {}, criteria.length), " criteria"),
+        h("span", {}, h("b", {}, plan.standards.length), " standards")));
+
+    const files = [...groups.entries()].map(([path, cs]) => {
+      const [cls, sym] = markOf(cs);
+      return h("div", { class: "file", "data-path": path },
+        h("div", { class: "head" }, h("span", { class: "mark " + cls }, sym), h("span", { class: "path" }, path)),
+        cs.map(([c, i]) => changeRow(c, i, plan, symbols)));
+    });
+
+    const leaf = (name) => name.split(".").pop();
+    const storyCriteria = criteria.length ? h("ol", { class: "criteria" }, criteria.map(([n, text, ts]) => h("li", {},
+      h("span", {}, text),
+      ts.length
+        ? h("span", { class: "cov yes" }, "✓ ", ts.map((t, i) => [i ? ", " : "", h("code", {}, leaf(t.name))]))
+        : h("span", { class: "cov no" }, "✗ no test")))) : null;
+
+    const findings = (check?.findings || []).map(f => h("li", { class: f.severity },
+      h("span", { class: "code" }, f.code), h("span", {}, f.message)));
+
+    $("main").replaceChildren(
+      header,
+      plan.story ? h("details", { class: "story" }, h("summary", {}, "Story"), h("div", { class: "story-text" }, plan.story)) : null,
+      storyCriteria ? h("section", {}, h("h3", {}, "Story criteria"), storyCriteria) : null,
+      h("section", {}, h("h3", {}, "Changes"), files.length ? files : h("div", { class: "empty" }, "No changes yet.")),
+      plan.standards.length ? h("section", {}, h("h3", {}, "Standards"),
+        h("div", { class: "chips" }, plan.standards.map(s => h("span", { class: "chip mono" }, s)))) : null,
+      check ? h("section", {}, h("h3", {}, "Gates"), h("ul", { class: "findings" }, findings)) : null,
+      h("footer", {}, `${plan.repo} @ ${plan.sha}`));
+    document.title = `${plan.id} · StoryPlan`;
+    for (const a of document.querySelectorAll("#plans a")) a.classList.toggle("on", a.dataset.id === plan.id);
+  }
+
+  async function copy(text) {
+    try { await navigator.clipboard.writeText(text); toast("Markdown copied"); return; } catch { }
+    const ta = h("textarea", { style: "position:fixed;opacity:0" });
+    ta.value = text; document.body.append(ta); ta.select();
+    const ok = document.execCommand && document.execCommand("copy");
+    ta.remove();
+    toast(ok ? "Markdown copied" : "Copy blocked by the host");
+  }
+
+  // ---------- boot ----------
+  async function bootHost() {
+    $("shell").classList.add("app");
+    try {
+      const r = await request("ui/initialize", {
+        protocolVersion: "2026-01-26",
+        appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] },
+        clientInfo: { name: "storyplan-view", version: "0.1.0" }
+      });
+      applyContext(r?.hostContext);
+    } catch (err) { toast("Host init failed: " + err.message); }
+    notify("ui/notifications/initialized", {});
+    let last = "";
+    new ResizeObserver(() => {
+      const size = { width: Math.ceil(document.documentElement.scrollWidth), height: Math.ceil(document.documentElement.scrollHeight) };
+      const key = size.width + "x" + size.height;
+      if (key !== last) { last = key; notify("ui/notifications/size-changed", size); }
+    }).observe(document.body);
+  }
+
+  async function bootWeb() {
+    $("nav").hidden = false;
+    let list = [];
+    try { list = (await callTool("plan_list", {}))?.structuredContent?.items || []; }
+    catch (err) { return $("main").replaceChildren(h("div", { class: "error" }, String(err.message))); }
+    $("plans").replaceChildren(...list.map(p => h("a", { href: "#" + p.id, "data-id": p.id }, p.id, h("small", {}, `${p.title} · ${p.status}`))));
+    const pick = () => {
+      const id = decodeURIComponent(location.hash.slice(1)) || list[0]?.id;
+      if (!id) return $("main").replaceChildren(h("div", { class: "empty" }, "No plans yet. Ask your agent to run the preplan prompt."));
+      run("plan_show", { id }, { refresh: false });
+    };
+    window.addEventListener("hashchange", pick);
+    pick();
+  }
+
+  inHost ? bootHost() : bootWeb();
+})();
+</script>
+</body>
+</html>

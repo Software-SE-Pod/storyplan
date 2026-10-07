@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <WarnOn>3390;$(WarnOn)</WarnOn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Model.fs" />
+    <Compile Include="Json.fs" />
+    <Compile Include="Git.fs" />
+    <Compile Include="Symbols.fs" />
+    <Compile Include="Index.fs" />
+    <Compile Include="Standards.fs" />
+    <Compile Include="Scip.fs" />
+    <Compile Include="Engine.fs" />
+    <Compile Include="Tools.fs" />
+  </ItemGroup>
+
+</Project>

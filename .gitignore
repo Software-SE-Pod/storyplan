@@ -1,0 +1,8 @@
+bin/
+obj/
+out/
+artifacts/
+TestResults/
+.stories/
+*.user
+.vs/
