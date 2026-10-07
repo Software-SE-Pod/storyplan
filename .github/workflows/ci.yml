@@ -23,7 +23,7 @@ jobs:
         run: dotnet test tests/StoryPlan.Tests -c Release
       - name: Schema and CLI work
         run: |
-          dotnet run --project src/StoryPlan.Mcp -c Release --no-build -- schema plan > /dev/null
+          dotnet run --project src/StoryPlan.Mcp -c Release -- schema plan > /dev/null
           dotnet pack src/StoryPlan.Mcp -c Release -o out/packages --nologo
 
   publisher:
